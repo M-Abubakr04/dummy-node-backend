@@ -10,22 +10,22 @@ const port = Number(
 const environment = process.env.SERVER_ENV || "unknown";
 
 const server = http.createServer((request, response) => {
-  if (request.url === "/broken-health") {
-    response.writeHead(200, {
-      "Content-Type": "application/json"
-    });
+  if (request.url === "/health") {
+  response.writeHead(200, {
+    "Content-Type": "application/json"
+  });
 
-    response.end(
-      JSON.stringify({
-        status: "healthy",
-        environment: environment,
-        hostname: os.hostname(),
-        timestamp: new Date().toISOString()
-      })
-    );
+  response.end(
+    JSON.stringify({
+      status: "healthy",
+      environment: environment,
+      hostname: os.hostname(),
+      timestamp: new Date().toISOString()
+    })
+  );
 
-    return;
-  }
+  return;
+}
 
   response.writeHead(200, {
     "Content-Type": "application/json"
