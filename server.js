@@ -33,8 +33,8 @@ const server = http.createServer((request, response) => {
 
   response.end(
     JSON.stringify({
-      message: "Dummy Node backend deployed successfully",
-      version: "1.0.0",
+      message: "Dummy Node backend version 2 deployed successfully",
+      version: "2.0.0",
       environment: environment,
       hostname: os.hostname()
     })
