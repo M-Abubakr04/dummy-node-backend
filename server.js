@@ -11,22 +11,21 @@ const environment = process.env.SERVER_ENV || "unknown";
 
 const server = http.createServer((request, response) => {
   if (request.url === "/health") {
-  response.writeHead(200, {
+  response.writeHead(500, {
     "Content-Type": "application/json"
   });
 
   response.end(
     JSON.stringify({
-      status: "healthy",
+      status: "unhealthy",
+      message: "Intentional health-check failure for rollback testing",
       environment: environment,
-      hostname: os.hostname(),
-      timestamp: new Date().toISOString()
+      hostname: os.hostname()
     })
   );
 
   return;
 }
-
   response.writeHead(200, {
     "Content-Type": "application/json"
   });
