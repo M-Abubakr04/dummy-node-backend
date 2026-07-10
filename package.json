@@ -1,0 +1,9 @@
+{
+  "name": "dummy-node-backend",
+  "version": "1.0.0",
+  "description": "Dummy Node.js backend for testing GitHub Actions deployment",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  }
+}

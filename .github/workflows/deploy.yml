@@ -1,0 +1,143 @@
+name: Deploy Node Backend
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Main Deploy
+
+    runs-on:
+      - self-hosted
+      - main
+
+    environment: ${{ github.ref_name }}
+
+    env:
+      IMAGE_NAME: ${{ vars.IMAGE_NAME }}
+      APP_ENV: ${{ github.ref_name }}
+      CONTAINER_NAME: ${{ vars.CONTAINER_NAME }}-${{ github.ref_name }}
+      PORT: ${{ vars.PORT }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Display deployment configuration
+        run: |
+          echo "Branch: ${APP_ENV}"
+          echo "Image: ${IMAGE_NAME}:${APP_ENV}"
+          echo "Container: ${CONTAINER_NAME}"
+          echo "Application port: ${PORT}"
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            -t "${IMAGE_NAME}:${APP_ENV}" \
+            .
+
+      - name: Create .env file
+        run: |
+          cat > .env <<EOF_ENV
+          SERVER_PORT=${{ vars.SERVER_PORT }}
+          SERVER_ENV=${{ vars.SERVER_ENV }}
+          EOF_ENV
+
+          echo ".env file created successfully"
+
+      - name: Start new container on temporary port
+        run: |
+          TEMP_PORT=$((PORT + 1))
+          echo "TEMP_PORT=${TEMP_PORT}" >> "$GITHUB_ENV"
+
+          echo "Temporary port: ${TEMP_PORT}"
+
+          docker rm -f "${CONTAINER_NAME}-new" 2>/dev/null || true
+
+          docker run -d \
+            --name "${CONTAINER_NAME}-new" \
+            -p "${TEMP_PORT}:${PORT}" \
+            --env-file .env \
+            "${IMAGE_NAME}:${APP_ENV}"
+
+      - name: Health check new container
+        run: |
+          echo "Waiting for the new container on port ${TEMP_PORT}..."
+
+          for i in $(seq 1 30); do
+            if curl -sf "http://localhost:${TEMP_PORT}/health" > /dev/null; then
+              echo "New container is healthy on attempt ${i}"
+              curl -s "http://localhost:${TEMP_PORT}/health"
+              exit 0
+            fi
+
+            echo "Attempt ${i} failed. Retrying in 3 seconds..."
+            sleep 3
+          done
+
+          echo "New container failed the health check"
+          echo "----- New container logs -----"
+          docker logs "${CONTAINER_NAME}-new" --tail 100 || true
+
+          docker rm -f "${CONTAINER_NAME}-new" || true
+
+          echo "The existing container was not changed."
+          exit 1
+
+      - name: Switch to new container
+        run: |
+          echo "Stopping the existing container if it exists..."
+
+          docker stop "${CONTAINER_NAME}" 2>/dev/null || true
+          docker rm "${CONTAINER_NAME}" 2>/dev/null || true
+
+          echo "Removing temporary container..."
+
+          docker rm -f "${CONTAINER_NAME}-new"
+
+          echo "Starting final container on port ${PORT}..."
+
+          docker run -d \
+            --name "${CONTAINER_NAME}" \
+            -p "${PORT}:${PORT}" \
+            --restart unless-stopped \
+            --env-file .env \
+            "${IMAGE_NAME}:${APP_ENV}"
+
+      - name: Verify final container
+        run: |
+          echo "Verifying final container..."
+
+          for i in $(seq 1 10); do
+            if curl -sf "http://localhost:${PORT}/health" > /dev/null; then
+              echo "Final container is healthy on attempt ${i}"
+              curl -s "http://localhost:${PORT}/health"
+              exit 0
+            fi
+
+            echo "Final verification attempt ${i} failed."
+            sleep 3
+          done
+
+          echo "Final container verification failed"
+          echo "----- Final container logs -----"
+          docker logs "${CONTAINER_NAME}" --tail 100 || true
+          exit 1
+
+      - name: Show successful deployment
+        if: success()
+        run: |
+          echo "Deployment completed successfully"
+          echo "Environment: ${APP_ENV}"
+          echo "Container: ${CONTAINER_NAME}"
+          echo "Application port: ${PORT}"
+
+          docker ps --filter "name=${CONTAINER_NAME}"
+
+      - name: Show deployment failure
+        if: failure()
+        run: |
+          echo "Deployment failed"
+          docker ps -a
